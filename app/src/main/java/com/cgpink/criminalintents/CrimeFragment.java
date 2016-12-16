@@ -3,6 +3,7 @@ package com.cgpink.criminalintents;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.provider.ContactsContract;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.text.Editable;
@@ -37,7 +38,10 @@ public class CrimeFragment extends Fragment {
     private Button mDateButton;
     private Button mTimeButton;
     private CheckBox mSolvedCheckBox;
+    private Intent mPickIntent;
+
     @BindView(R.id.crime_report) Button mReportButton;
+    @BindView(R.id.crime_suspect) Button mSuspectButton;
 
     public static final String ARG_CRIME_ID = "crime_id";
     public static final String DIALOG_DATE = "DialogDate";
@@ -45,6 +49,7 @@ public class CrimeFragment extends Fragment {
 
     public static final int REQUEST_DATE = 0;
     public static final int REQUEST_TIME = 1;
+    public static final int REQUEST_CONTACT = 2;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -120,6 +125,11 @@ public class CrimeFragment extends Fragment {
             }
         });
 
+        mPickIntent = new Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI);
+        if (mCrime.getSuspect() != null) {
+            mSuspectButton.setText(mCrime.getSuspect());
+        }
+
         return v;
     }
 
@@ -135,6 +145,12 @@ public class CrimeFragment extends Fragment {
         i = Intent.createChooser(i, getString(R.string.send_report));
         startActivity(i);
     }
+
+    @OnClick(R.id.crime_suspect)
+    public void onClickSuspectButton(View view) {
+        startActivityForResult(mPickIntent, REQUEST_CONTACT);
+    }
+
 
     private void updateDate() {
         mDateButton.setText(DateFormat.format("yyyy-MM-dd, E", mCrime.getDate()));
