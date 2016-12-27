@@ -1,5 +1,6 @@
 package com.cgpink.criminalintents;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -7,12 +8,15 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.ShareCompat;
+import android.support.v4.content.ContextCompat;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.format.DateFormat;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -23,6 +27,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.ImageButton;
 
 import java.util.Date;
 import java.util.UUID;
@@ -46,6 +51,7 @@ public class CrimeFragment extends Fragment {
 
     @BindView(R.id.crime_report) Button mReportButton;
     @BindView(R.id.crime_suspect) Button mSuspectButton;
+    @BindView(R.id.crime_dial) ImageButton mDialButton;
 
     public static final String ARG_CRIME_ID = "crime_id";
     public static final String DIALOG_DATE = "DialogDate";
@@ -54,6 +60,8 @@ public class CrimeFragment extends Fragment {
     public static final int REQUEST_DATE = 0;
     public static final int REQUEST_TIME = 1;
     public static final int REQUEST_CONTACT = 2;
+    public static final int REQUEST_DIAL = 3;
+    public static final int MY_PERMISSIONS_REQUEST_READ_CONTACTS = 4;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -63,6 +71,7 @@ public class CrimeFragment extends Fragment {
         mCrime = CrimeLab.get(getActivity()).getCrime(crimeId);
 
         setHasOptionsMenu(true);
+        requestReadContactsPermission();
     }
 
     @Override
@@ -161,6 +170,10 @@ public class CrimeFragment extends Fragment {
         startActivityForResult(mPickIntent, REQUEST_CONTACT);
     }
 
+    @OnClick(R.id.crime_dial)
+    public void onClickDial(View view){
+        startActivityForResult(mPickIntent, REQUEST_DIAL);
+    }
 
     private void updateDate() {
         mDateButton.setText(DateFormat.format("yyyy-MM-dd, E", mCrime.getDate()));
@@ -199,6 +212,53 @@ public class CrimeFragment extends Fragment {
                 mSuspectButton.setText(mCrime.getSuspect());
             } finally {
                 c.close();
+            }
+        } else if (requestCode == REQUEST_DIAL && data != null) {
+            Uri contactUri = data.getData();
+            String[] queryFields = new String[] {
+                    ContactsContract.Contacts._ID
+            };
+
+            String contactId = "";
+            Cursor c = getActivity().getContentResolver().query(contactUri,
+                    queryFields, null, null, null);
+
+            try {
+                if (c.getCount() == 0) {
+                    return;
+                }
+
+                c.moveToFirst();
+                contactId = c.getString(0);
+
+            } finally {
+                c.close();
+            }
+
+            // phone number
+            Cursor phoneCursor = getActivity().getContentResolver().query (
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    new String[] { ContactsContract.CommonDataKinds.Phone.NUMBER},
+                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = " + contactId,
+                    null, null
+            );
+
+            try {
+                if (phoneCursor.getCount() == 0) {
+                    return;
+                }
+
+                phoneCursor.moveToFirst();
+                String dialNumber = phoneCursor.getString(0);
+                Log.d("DEBUG", dialNumber);
+
+
+                Uri dialUri = Uri.parse("tel:" + dialNumber);
+                Intent dialIntent = new Intent(Intent.ACTION_DIAL, dialUri);
+                startActivity(dialIntent);
+
+            } finally {
+                phoneCursor.close();
             }
         }
     }
@@ -266,5 +326,52 @@ public class CrimeFragment extends Fragment {
                 mCrime.getTitle(), dateString, solvedString, suspect);
 
         return report;
+    }
+
+    private void requestReadContactsPermission() {
+        if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.READ_CONTACTS) !=
+                PackageManager.PERMISSION_GRANTED) {
+
+            // Should we show an explanation?
+            if (ActivityCompat.shouldShowRequestPermissionRationale(getActivity(),
+                    Manifest.permission.READ_CONTACTS)) {
+
+                // Show an expanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+
+            } else {
+
+                // No explanation needed, we can request the permission.
+                ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.READ_CONTACTS},
+                        MY_PERMISSIONS_REQUEST_READ_CONTACTS);
+                // MY_PERMISSIONS_REQUEST_READ_EXT_STORAGE is an
+                // app-defined int constant. The callback method gets the
+                // result of the request.
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case MY_PERMISSIONS_REQUEST_READ_CONTACTS : {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // permission was granted, yay! Do the
+                    // contacts-related task you need to do.
+                    mDialButton.setEnabled(true);
+                } else {
+
+                    // permission denied, boo! Disable the
+                    // functionality that depends on this permission.
+                    mDialButton.setEnabled(false);
+                }
+                return;
+            }
+
+            // other 'case' lines to check for other
+            // permissions this app might request
+        }
     }
 }
