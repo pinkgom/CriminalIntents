@@ -31,7 +31,6 @@ import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageButton;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 
 import java.io.File;
@@ -58,17 +57,22 @@ public class CrimeFragment extends Fragment {
 
     private Intent mCaptureImage;
 
-    @BindView(R.id.crime_report) Button mReportButton;
-    @BindView(R.id.crime_suspect) Button mSuspectButton;
-    @BindView(R.id.crime_dial) ImageButton mDialButton;
-    @BindView(R.id.crime_dial) Button mDialButton;
-    @BindView(R.id.crime_photo) ImageView mPhotoView;
-    @BindView(R.id.crime_camera) ImageButton mPhotoButton;
+    @BindView(R.id.crime_report)
+    Button mReportButton;
+    @BindView(R.id.crime_suspect)
+    Button mSuspectButton;
+    @BindView(R.id.crime_dial)
+    ImageButton mDialButton;
+    @BindView(R.id.crime_photo)
+    ImageView mPhotoView;
+    @BindView(R.id.crime_camera)
+    ImageButton mPhotoButton;
 
 
     public static final String ARG_CRIME_ID = "crime_id";
     public static final String DIALOG_DATE = "DialogDate";
     public static final String DIALOG_TIME = "DialogTime";
+    public static final String DIALOG_PHOTO = "DialogPhoto";
 
     public static final int REQUEST_DATE = 0;
     public static final int REQUEST_TIME = 1;
@@ -76,12 +80,13 @@ public class CrimeFragment extends Fragment {
     public static final int REQUEST_DIAL = 3;
     public static final int MY_PERMISSIONS_REQUEST_READ_CONTACTS = 4;
     private static final int REQUEST_PHOTO = 5;
+    private static final int REQUEST_ORIGIN_PHOTO = 6;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        UUID crimeId = (UUID)getArguments().getSerializable(ARG_CRIME_ID);
+        UUID crimeId = (UUID) getArguments().getSerializable(ARG_CRIME_ID);
         mCrime = CrimeLab.get(getActivity()).getCrime(crimeId);
         mPhotoFile = CrimeLab.get(getActivity()).getPhotoFile(mCrime);
 
@@ -94,7 +99,7 @@ public class CrimeFragment extends Fragment {
         View v = inflater.inflate(R.layout.fragment_crime, container, false);
         ButterKnife.bind(this, v);
 
-        mTitleField = (EditText)v.findViewById(R.id.crime_title);
+        mTitleField = (EditText) v.findViewById(R.id.crime_title);
         mTitleField.setText(mCrime.getTitle());
         mTitleField.addTextChangedListener(new TextWatcher() {
             @Override
@@ -200,9 +205,21 @@ public class CrimeFragment extends Fragment {
     public void onClickCameraButton(View view) {
         startActivityForResult(mCaptureImage, REQUEST_PHOTO);
     }
+
     @OnClick(R.id.crime_dial)
-    public void onClickDial(View view){
+    public void onClickDial(View view) {
         startActivityForResult(mPickIntent, REQUEST_DIAL);
+    }
+
+    @OnClick(R.id.crime_photo)
+    public void onClickCrimePhoto(View view) {
+
+        FragmentManager fragmentManager = getFragmentManager();
+        PhotoFragment photo = PhotoFragment.newInstance(mPhotoFile, mCrime.getTitle());
+
+        photo.setTargetFragment(CrimeFragment.this, REQUEST_ORIGIN_PHOTO);
+
+        photo.show(fragmentManager, DIALOG_PHOTO);
     }
 
     private void updateDate() {
@@ -226,7 +243,7 @@ public class CrimeFragment extends Fragment {
             mTimeButton.setText(String.valueOf(hour));
         } else if (requestCode == REQUEST_CONTACT && data != null) {
             Uri contactUri = data.getData();
-            String[] queryFields = new String[] {
+            String[] queryFields = new String[]{
                     ContactsContract.Contacts.DISPLAY_NAME
             };
             Cursor c = getActivity().getContentResolver()
@@ -245,6 +262,53 @@ public class CrimeFragment extends Fragment {
             }
         } else if (requestCode == REQUEST_PHOTO) {
             updatePhotoView();
+        } else if (requestCode == REQUEST_DIAL && data != null) {
+            Uri contactUri = data.getData();
+            String[] queryFields = new String[] {
+                    ContactsContract.Contacts._ID
+            };
+
+            String contactId = "";
+            Cursor c = getActivity().getContentResolver().query(contactUri,
+                    queryFields, null, null, null);
+
+            try {
+                if (c.getCount() == 0) {
+                    return;
+                }
+
+                c.moveToFirst();
+                contactId = c.getString(0);
+
+            } finally {
+                c.close();
+            }
+
+            // phone number
+            Cursor phoneCursor = getActivity().getContentResolver().query (
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    new String[] { ContactsContract.CommonDataKinds.Phone.NUMBER},
+                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = " + contactId,
+                    null, null
+            );
+
+            try {
+                if (phoneCursor.getCount() == 0) {
+                    return;
+                }
+
+                phoneCursor.moveToFirst();
+                String dialNumber = phoneCursor.getString(0);
+                Log.d("DEBUG", dialNumber);
+
+
+                Uri dialUri = Uri.parse("tel:" + dialNumber);
+                Intent dialIntent = new Intent(Intent.ACTION_DIAL, dialUri);
+                startActivity(dialIntent);
+
+            } finally {
+                phoneCursor.close();
+            }
         }
     }
 
@@ -257,7 +321,7 @@ public class CrimeFragment extends Fragment {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
 
-        switch(item.getItemId()) {
+        switch (item.getItemId()) {
             case R.id.menu_item_delete_crime:
                 removeCrime();
                 getActivity().finish();
@@ -340,7 +404,7 @@ public class CrimeFragment extends Fragment {
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
         switch (requestCode) {
-            case MY_PERMISSIONS_REQUEST_READ_CONTACTS : {
+            case MY_PERMISSIONS_REQUEST_READ_CONTACTS: {
                 // If request is cancelled, the result arrays are empty.
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     // permission was granted, yay! Do the
@@ -362,9 +426,9 @@ public class CrimeFragment extends Fragment {
 
     private void updatePhotoView() {
         if (mPhotoFile == null || !mPhotoFile.exists()) {
-           mPhotoView.setImageDrawable(null);
+            mPhotoView.setImageDrawable(null);
         } else {
-            Bitmap bitmap = PictureUtils.getScaledBitmap(mPhotoFile.getPath(), getActivity()) ;
+            Bitmap bitmap = PictureUtils.getScaledBitmap(mPhotoFile.getPath(), getActivity());
             mPhotoView.setImageBitmap(bitmap);
         }
     }
