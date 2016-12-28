@@ -1,6 +1,6 @@
 package com.cgpink.criminalintents;
 
-import android.content.Intent;
+import android.app.Activity;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
@@ -20,9 +20,6 @@ import android.widget.TextView;
 
 import java.util.List;
 
-/**
- * Created by pinkgom on 2016-12-16.
- */
 public class CrimeListFragment extends Fragment {
 
     private RecyclerView mCrimeRecyclerView;
@@ -32,6 +29,23 @@ public class CrimeListFragment extends Fragment {
     private int currentItemPosition = -1;
     private boolean mSubtitleVisible;
 
+    private Callbacks mCallbacks;
+
+    public interface Callbacks {
+        void onCrimeSelected(Crime crime);
+    }
+
+    @Override
+    public void onAttach(Activity activity) {
+        super.onAttach(activity);
+        mCallbacks = (Callbacks) activity;
+    }
+
+    @Override
+    public void onDetach() {
+        super.onDetach();
+        mCallbacks = null;
+    }
 
     private static final String SAVED_SUBTITLE_VISIBLE = "subtitle";
 
@@ -67,7 +81,7 @@ public class CrimeListFragment extends Fragment {
         return view;
     }
 
-    private void updateUI() {
+    public void updateUI() {
         CrimeLab crimeLab = CrimeLab.get(getActivity());
         List<Crime> crimes = crimeLab.getCrimes();
 
@@ -126,9 +140,8 @@ public class CrimeListFragment extends Fragment {
     private void addCrime() {
         Crime crime = new Crime();
         CrimeLab.get(getActivity()).addCrime(crime);
-
-        Intent intent = CrimePagerActivity.newIntent(getActivity(), crime.getId());
-        startActivity(intent);
+        updateUI();
+        mCallbacks.onCrimeSelected(crime);
     }
 
     @Override
@@ -179,10 +192,7 @@ public class CrimeListFragment extends Fragment {
 
         @Override
         public void onClick(View view) {
-            Intent intent = CrimePagerActivity.newIntent(getActivity(), mCrime.getId());
-            intent.putExtra(SAVED_SUBTITLE_VISIBLE, mSubtitleVisible);
-            currentItemPosition = getAdapterPosition();
-            startActivity(intent);
+            mCallbacks.onCrimeSelected(mCrime);
         }
     }
 
